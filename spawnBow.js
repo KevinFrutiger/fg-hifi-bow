@@ -1,6 +1,7 @@
 var userData = { // These keys are features in the API
   grabbableKey: {
-    grabbable: true
+    grabbable: true,
+    ignoreIK: false, // Keeps bow from pushing away from hand at extremes.
   },
   wearable: { // keep on joint when trigger released
     joints: {
