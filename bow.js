@@ -1,14 +1,81 @@
+// Utilities
+function conditionalPrint() {
+  var shouldPrint = true;
+
+  return function(message) {
+    if(shouldPrint) {
+      print(message);
+      shouldPrint = false;
+    }
+  }
+}
+
+var printOnce = conditionalPrint();
+
+function printCache() {
+  var lastMessage = '';
+
+  return function(message) {
+    if (message != lastMessage) {
+      print(message);
+      lastMessage = message;
+    }
+  }
+}
+
+var printIfChanged = printCache();
+
+//
+
 (function() {
 
   print('this is the bow function body');
 
   //Script.include("/~/system/libraries/utils.js");
 
-  const BOW_STRING_NAME = 'Hifi-Bow-String';
-  const DRAW_BOW_STRING_THRESHOLD = 0.80;
-  const NEAR_TO_RELAXED_NOCK_DISTANCE = 0.50;
+  const BOWSTRING_NAME = 'HiFi-Bowstring';
+  const DRAW_BOWSTRING_THRESHOLD = 0.80;
+  const NEAR_TO_RELAXED_SHELF_DISTANCE = 0.50;
   const ARROW_SHELF_OFFSET_FORWARD = 0.08;
   const ARROW_SHELF_OFFSET_UP = 0.035;
+  const BOWSTRING_DRAW_DELTA_FOR_HAPTIC_PULSE = 0.09;
+  const BOWSTRING_MAX_DRAW = 0.7;
+  const TOP_NOCK_POSITION = { // Local to bowstring
+    x: 0,
+    y: 0,
+    z: 0
+  }
+  const BOTTOM_NOCK_POSITION = {
+    x: 0,
+    y: -1.2,
+    z: 0
+  }
+  //const TOP_NOCK_OFFSET = 0.6; // Vertical distance of top nock from center.
+  //const BOTTOM_NOCK_OFFSET = 0.6; // Vertical distance of bottom nock from center.
+  //const NOCKS_OFFSET_BACKWARDS = 0.1; // Horizontal distance of nocks from center.
+
+  const ARROW_NAME = 'HiFi-Arrow';
+  const ARROW_MODEL_URL = Script.resolvePath('arrow.fbx');
+  const ARROW_TIP_OFFSET = 0.47; // Distance from center of arrow to tip of the arrowhead.
+  const ARROW_DIMENSIONS = {
+    x: 0.20,
+    y: 0.19,
+    z: 0.93
+  }
+  const ARROW_GRAVITY = {
+    x: 0,
+    y: -9.8,
+    z: 0
+  };
+  const ARROW_LIFETIME = 15; // seconds
+  const MIN_ARROW_DISTANCE_FROM_BOW_REST = 0.2;
+  const MAX_ARROW_DISTANCE_FROM_BOW_REST = ARROW_DIMENSIONS.z - 0.2;
+  const MIN_ARROW_DISTANCE_FROM_BOW_REST_TO_SHOOT = 0.2;
+  const MIN_ARROW_SPEED = 3;
+  const MAX_ARROW_SPEED = 30;
+
+  // Null ID used to reset the parent property of an entity (i.e. unparent it).
+  const NULL_UUID = '{00000000-0000-0000-0000-000000000000}';
 
   const TRIGGER_CONTROLS = [
     Controller.Standard.LT,
@@ -22,20 +89,23 @@
 
   function Bow() {
     print('Bow constructor');
-
-    this.pullBackDistance = 0;
-    this.backHandBusy = false;
   }
+
+  Bow.prototype.state = STATE_IDLE;
+  Bow.prototype.arrowID = null; // The arrow entity
+  Bow.prototype.backHandBusy = false;
+  Bow.prototype.pullBackDistance = 0;
 
   Bow.prototype.preload = function(entityID) {
     print('Bow preload');
     this.entityID = entityID;
-    this.createBowString();
+    this.createBowstring();
   };
 
-  Bow.prototype.startEquip = function(entityID, args) { // args is [joint name, jointid], i think
+  Bow.prototype.startEquip = function(entityID, args) { // args is [joint name, jointid]
     print('startEquip', entityID, args);
 
+    // Store which hand is on the bow and which will interact with the bowstring
     this.bowHand = args[0];
     this.bowstringHand = (this.bowHand === 'left') ? 'right' : 'left';
 
@@ -44,17 +114,19 @@
     data.grabbableKey.grabbable = false;
     Entities.editEntity(entityID, {userData: JSON.stringify(data)});
 
-    // Stop entity from colliding with things
+    // Stop bow from colliding with things
     Entities.editEntity(entityID, {
       collidesWith: ''
     });
 
-
+    // Start the update loop.
     var self = this;
     this.updateIntervalID = Script.setInterval(function() { self.update(); }, 11);
   };
 
   Bow.prototype.releaseEquip = function(entityID, args) {
+
+    // Stop the update loop.
     Script.clearInterval(this.updateIntervalID);
     this.updateIntervalID = null;
 
@@ -72,26 +144,28 @@
   };
 
   Bow.prototype.update = function() {
-    // Get the float value of the trigger on the bow string hand's controller.
+    // Get the float value of the trigger on the bowstring hand's controller.
     this.triggerValue = Controller.getValue(
         TRIGGER_CONTROLS[(this.bowstringHand === 'right') ? 1 : 0]);
 
+    // Get the position and rotation of the bow.
     this.bowProperties = Entities.getEntityProperties(this.entityID,
                                                       ['position', 'rotation']);
 
+    // Calc the arrow shelf's position.
     var arrowShelfPosition = this.getArrowShelfPosition(this.bowProperties);
 
     // TESTING ONLY
-    if (!testEntityID) {
-      testEntityID = Entities.addEntity({
-        type: 'Box',
-        name: 'bow-test-cube',
-        position: arrowShelfPosition,
-        collisionless: true
-      });
-    } else {
-      Entities.editEntity(testEntityID, {position: arrowShelfPosition});
-    }
+    // if (!testEntityID) {
+    //   testEntityID = Entities.addEntity({
+    //     type: 'Box',
+    //     name: 'bow-test-cube',
+    //     position: arrowShelfPosition,
+    //     collisionless: true
+    //   });
+    // } else {
+    //   Entities.editEntity(testEntityID, {position: arrowShelfPosition});
+    // }
     // END TESTING ONLY
 
     var bowstringHandPosition =
@@ -100,30 +174,69 @@
             Vec3.subtract(arrowShelfPosition, bowstringHandPosition);
     var pullBackDistance = Vec3.length(bowstringHandToArrowShelf);
 
-    // if (this.state == STATE_IDLE) {
+    printIfChanged('state is ' + this.state + ' ' + this.arrowID);
 
-    //   this.pullBackDistance = 0;
-    //   this.resetBowStringToIdle();
+    if (this.state === STATE_IDLE) {
 
-    //   if (this.triggerValue >= DRAW_BOW_STRING_THRESHOLD
-    //       && pullBackDistance < NEAR_TO_RELAXED_NOCK_DISTANCE
-    //       && !this.backHandBusy) {
+      this.pullBackDistance = 0;
+      this.resetBowstringToIdle();
 
-    //     this.state = STATE_ARROW_GRABBED;
+      if (this.triggerValue >= DRAW_BOWSTRING_THRESHOLD
+          && pullBackDistance < NEAR_TO_RELAXED_SHELF_DISTANCE
+          && !this.backHandBusy) {
 
-    //   }
-    // }
+        this.state = STATE_ARROW_GRABBED;
 
-    // if (this.state == STATE_ARROW_GRABBED) {
-    //   //
-    // }
+      }
+    }
+
+    if (this.state === STATE_ARROW_GRABBED) {
+      if (!this.arrowID) {
+        // Disable the auxilary hand functionality for the hand that's grabbing
+        // the bowstring, like the grabbing laser pointer, tablet stylus, etc.
+        Messages.sendLocalMessage('Hifi-Hand-Disabler', this.bowstringHand);
+
+        // Rez the arrow.
+        this.arrowID = this.createArrow();
+      }
+
+      if (this.triggerValue < DRAW_BOWSTRING_THRESHOLD) {
+
+        if (pullBackDistance >= MIN_ARROW_DISTANCE_FROM_BOW_REST_TO_SHOOT) {
+          // Shoot the arrow.
+
+          // Re-enable the bowstring hand auxilary functions.
+          Messages.sendLocalMessage('Hifi-Hand-Disabler', 'none');
+
+          // Release the arrow.
+          this.updateArrowOnShelf(true, true);
+        } else {
+          // Discard the arrow.
+
+          // Re-enable the bowstring hand auxilary functions.
+          Messages.sendLocalMessage('Hifi-Hand-Disabler', 'none');
+
+          Entities.deleteEntity(this.arrowID);
+        }
+
+        this.arrowID = null;
+        this.state = STATE_IDLE;
+        this.resetBowstringToIdle();
+
+      } else {
+
+        this.updateArrowOnShelf(false, true);
+        this.updateBowstring();
+
+      }
+    }
 
   };
 
-  Bow.prototype.createBowString = function() {
-    this.bowStringID = Entities.addEntity({
+  Bow.prototype.createBowstring = function() {
+    this.bowstringID = Entities.addEntity({
       type: 'Line',
-      name: BOW_STRING_NAME,
+      name: BOWSTRING_NAME,
       parentID: this.entityID,
       collisionless: true,
       ignoreForCollisions: 1,
@@ -141,14 +254,144 @@
     });
   };
 
-  Bow.prototype.resetBowStringToIdle = function() {
-    Entities.editEntity(this.stringID, {
-      linePoints: [ {x: 0, y: 0, z: 0 }, {x: 0, y: -1.2, z: 0 } ],
+  Bow.prototype.resetBowstringToIdle = function() {
+    Entities.editEntity(this.bowstringID, {
+      linePoints: [TOP_NOCK_POSITION, BOTTOM_NOCK_POSITION],
       lineWidth: 10,
       localPosition: {x: 0, y: 0.6, z: 0.1 },
       localRotation: {w: 1, x: 0, y: 0, z: 0 },
     });
   };
+
+  Bow.prototype.updateBowstring = function() {
+    // Calc the position of the arrow nock.
+    var bowstringProps = Entities.getEntityProperties(this.bowstringID,
+                                                      ['position', 'rotation']);
+    var arrowNockPositionLocal =
+            Vec3.subtract(this.arrowRearPosition, bowstringProps.position);
+    // Rotate the vector to align with the bow. (multiply Quat by Vec3)
+    arrowNockPositionLocal =
+            Vec3.multiplyQbyV(Quat.inverse(bowstringProps.rotation),
+                              arrowNockPositionLocal);
+
+    // Update the bowstring line.
+    Entities.editEntity(this.bowstringID, {
+      linePoints: [
+        TOP_NOCK_POSITION,
+        arrowNockPositionLocal,
+        BOTTOM_NOCK_POSITION,
+      ]
+    });
+  };
+
+  Bow.prototype.createArrow = function() {
+
+    var arrowID = Entities.addEntity({
+      name: ARROW_NAME,
+      type: 'Model',
+      modelURL: ARROW_MODEL_URL,
+      shapeType: 'simple-compound',
+      dimensions: ARROW_DIMENSIONS,
+      position: this.bowProperties.position,
+      parentID: this.entityID,
+      dynamic: false,
+      collisionless: true,
+      damping: 0.01,
+      userData: JSON.stringify({
+        grabbableKey: {
+          grabbable: false
+        },
+        createrSessionUUID: MyAvatar.sessionUUID
+      })
+    });
+
+    // TODO: make arrow stick
+
+    return arrowID;
+
+  };
+
+  Bow.prototype.updateArrowOnShelf = function(shouldRelease, shouldPulseHaptics) {
+    var arrowShelfPosition = this.getArrowShelfPosition(this.bowProperties);
+    var bowstringHandPosition =
+            this.getControllerLocation(this.bowstringHand).position;
+    var bowstringHandToArrowShelf =
+            Vec3.subtract(arrowShelfPosition, bowstringHandPosition);
+    var arrowRotation =
+            Quat.rotationBetween(Vec3.FRONT, bowstringHandToArrowShelf);
+
+    var handHapticIndex = (this.bowstringHand === 'left' ? 0 : 1);
+    var pullbackDistance = Vec3.length(bowstringHandToArrowShelf);
+
+    if (shouldPulseHaptics &&
+        Math.abs(pullbackDistance - this.pullbackDistance) >
+            BOWSTRING_DRAW_DELTA_FOR_HAPTIC_PULSE) {
+
+        Controller.triggerHapticPulse(1, 20, handHapticIndex);
+        this.pullbackDistance = pullbackDistance;
+    }
+
+    // Cap the distance you can draw back the bowstring.
+    pullbackDistance = Math.min(BOWSTRING_MAX_DRAW, pullbackDistance);
+
+    var handToShelfDistance = Vec3.length(bowstringHandToArrowShelf);
+    var bowstringToShelfDistance =
+            Math.max(MIN_ARROW_DISTANCE_FROM_BOW_REST,
+                Math.min(MAX_ARROW_DISTANCE_FROM_BOW_REST, handToShelfDistance));
+    var arrowPosition = Vec3.subtract(arrowShelfPosition, Vec3.multiply(Vec3.normalize(bowstringHandToArrowShelf), bowstringToShelfDistance - ARROW_DIMENSIONS.z / 2.0));
+
+    var frontVector = Quat.getFront(arrowRotation);
+    var frontOffset = Vec3.multiply(frontVector, -ARROW_TIP_OFFSET);
+    var arrowRearPosition = Vec3.sum(arrowPosition, frontOffset);
+    this.arrowRearPosition = arrowRearPosition;
+
+    if (!shouldRelease) { // Aim the arrow.
+      Entities.editEntity(this.arrowID, {
+        position: arrowPosition,
+        rotation: arrowRotation
+      });
+    } else { // Shoot the arrow.
+      var arrowAge = Entities.getEntityProperties(this.arrow, ['age']).age;
+
+      // Scale the shot strength by the bowstring draw distance.
+      var arrowForce = this.scaleArrowShotStrength(bowstringToShelfDistance);
+
+      // Calc the velocity
+      var handToShelfNorm = Vec3.normalize(bowstringHandToArrowShelf);
+      var releaseVelocity = Vec3.multiply(handToShelfNorm, arrowForce);
+
+      // Set up the arrow for the physics sim and unparent from the bow.
+      var arrowProperties = {
+        dynamic: true,
+        collisionless: false,
+        collidesWith: 'static,dynamic,otherAvatar',
+        velocity: releaseVelocity,
+        parentID: NULL_UUID,
+        gravity: ARROW_GRAVITY,
+        lifetime: arrowAge + ARROW_LIFETIME
+      };
+
+      Entities.editEntity(this.arrowID, arrowProperties);
+
+      // TODO: Add particles
+
+      // Launch the arrow.
+      Entities.addAction('travel-orient', this.arrowID, {
+        forward: {x: 0, y: 0, z: -1},
+        angularTimeScale: 0.1,
+        tag: 'Arrow from HiFi-bow',
+        ttl: ARROW_LIFETIME
+      });
+    }
+
+  }
+
+  Bow.prototype.scaleArrowShotStrength = function(drawDistance) {
+    // Scale the shot strength to the portion of the available draw distance used.
+    var pct = (drawDistance - MIN_ARROW_DISTANCE_FROM_BOW_REST) /
+              (MAX_ARROW_DISTANCE_FROM_BOW_REST - MIN_ARROW_DISTANCE_FROM_BOW_REST);
+    return MIN_ARROW_SPEED + (pct * (MAX_ARROW_SPEED - MIN_ARROW_SPEED));
+  }
 
   Bow.prototype.getArrowShelfPosition = function(bowProperties) {
     // Get the vector pointing forward from the bow origin
@@ -193,7 +436,7 @@
 
         // add to the real position so the grab-point is out in front of the hand, a bit
         if (shouldOffset) {
-            var offset = getGrabPointSphereOffset(handController);
+            var offset = this.getGrabPointSphereOffset(handController);
             position = Vec3.sum(position, Vec3.multiplyQbyV(orientation, offset));
         }
 
@@ -210,8 +453,23 @@
             orientation: orientation,
             rotation: orientation,
             valid: valid};
-};
+  };
 
+
+// TODO: review getGrabPointSphereOffset
+  // this offset needs to match the one in libraries/display-plugins/src/display-plugins/hmd/HmdDisplayPlugin.cpp:378
+var GRAB_POINT_SPHERE_OFFSET = { x: 0.04, y: 0.13, z: 0.039 };  // x = upward, y = forward, z = lateral
+
+Bow.prototype.getGrabPointSphereOffset = function(handController) {
+    if (handController === Controller.Standard.RightHand) {
+        return GRAB_POINT_SPHERE_OFFSET;
+    }
+    return {
+        x: GRAB_POINT_SPHERE_OFFSET.x * -1,
+        y: GRAB_POINT_SPHERE_OFFSET.y,
+        z: GRAB_POINT_SPHERE_OFFSET.z
+    };
+};
 
 
   var bow = new Bow();
