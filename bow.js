@@ -38,9 +38,10 @@ var printIfChanged = printCache();
   const NEAR_TO_RELAXED_SHELF_DISTANCE = 0.50;
   const ARROW_SHELF_OFFSET_FORWARD = 0.08;
   const ARROW_SHELF_OFFSET_UP = 0.035;
+  const ARROW_SHELF_OFFSET_RIGHT = -0.010;
   const BOWSTRING_DRAW_DELTA_FOR_HAPTIC_PULSE = 0.09;
   const BOWSTRING_MAX_DRAW = 0.7;
-  const TOP_NOCK_POSITION = { // Local to bowstring
+  const TOP_NOCK_POSITION = { // Local to the bowstring
     x: 0,
     y: 0,
     z: 0
@@ -50,16 +51,13 @@ var printIfChanged = printCache();
     y: -1.2,
     z: 0
   }
-  //const TOP_NOCK_OFFSET = 0.6; // Vertical distance of top nock from center.
-  //const BOTTOM_NOCK_OFFSET = 0.6; // Vertical distance of bottom nock from center.
-  //const NOCKS_OFFSET_BACKWARDS = 0.1; // Horizontal distance of nocks from center.
 
   const ARROW_NAME = 'HiFi-Arrow';
   const ARROW_MODEL_URL = Script.resolvePath('arrow.fbx');
   const ARROW_TIP_OFFSET = 0.47; // Distance from center of arrow to tip of the arrowhead.
   const ARROW_DIMENSIONS = {
-    x: 0.20,
-    y: 0.19,
+    x: 0.1,
+    y: 0.1,
     z: 0.93
   }
   const ARROW_GRAVITY = {
@@ -351,7 +349,7 @@ var printIfChanged = printCache();
         rotation: arrowRotation
       });
     } else { // Shoot the arrow.
-      var arrowAge = Entities.getEntityProperties(this.arrow, ['age']).age;
+      var arrowAge = Entities.getEntityProperties(this.arrowID, ['age']).age;
 
       // Scale the shot strength by the bowstring draw distance.
       var arrowForce = this.scaleArrowShotStrength(bowstringToShelfDistance);
@@ -394,18 +392,22 @@ var printIfChanged = printCache();
   }
 
   Bow.prototype.getArrowShelfPosition = function(bowProperties) {
-    // Get the vector pointing forward from the bow origin
+    // Get the forward offset vector
     var frontVector = Quat.getFront(bowProperties.rotation);
-    // Offset the bow's forward vector to get the arrow shelf forward vector
     var arrowShelfVectorForward = Vec3.multiply(frontVector, ARROW_SHELF_OFFSET_FORWARD);
-    // Get the vector pointing up form the bow origin
+
+    // Get the up offset vector
     var upVector = Quat.getUp(bowProperties.rotation);
-    // Offset the bow's up vector to the arrow shelf up vector
     var arrowShelfVectorUp = Vec3.multiply(upVector, ARROW_SHELF_OFFSET_UP);
-    // Calc the horizontal position of the arrow shelf
+
+    // Get the left offset vector
+    var rightVector = Quat.getRight(bowProperties.rotation);
+    var arrowShelfVectorLeft = Vec3.multiply(rightVector, ARROW_SHELF_OFFSET_RIGHT);
+
+    // Sum the three offset directions to get the final position.
     var arrowShelfPosition = Vec3.sum(bowProperties.position, arrowShelfVectorForward);
-    // Adjust the vertical position of the arrow shelf vector
     arrowShelfPosition = Vec3.sum(arrowShelfPosition, arrowShelfVectorUp);
+    arrowShelfPosition = Vec3.sum(arrowShelfPosition, arrowShelfVectorLeft);
 
     return arrowShelfPosition;
   };
