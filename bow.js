@@ -54,6 +54,8 @@ var printIfChanged = printCache();
 
   const ARROW_NAME = 'HiFi-Arrow';
   const ARROW_MODEL_URL = Script.resolvePath('arrow.fbx');
+  const ARROW_PARTICLE_NAME = 'HiFi-Arrow-Particles';
+  const ARROW_PARTICLE_URL = Script.resolvePath('arrow-sparkle.png');
   const ARROW_TIP_OFFSET = 0.47; // Distance from origin of arrow to tip of the arrowhead.
   const ARROW_DIMENSIONS = {
     x: 0.1,
@@ -66,6 +68,7 @@ var printIfChanged = printCache();
     z: 0
   };
   const ARROW_LIFETIME = 15.0; // seconds
+  const ARROW_PARTICLE_LIFESPAN = 2.0; // seconds
   const MIN_ARROW_DISTANCE_FROM_BOW_REST = 0.2;
   const MAX_ARROW_DISTANCE_FROM_BOW_REST = ARROW_DIMENSIONS.z - 0.2;
   const MIN_ARROW_DISTANCE_FROM_BOW_REST_TO_SHOOT = 0.2;
@@ -359,8 +362,32 @@ var printIfChanged = printCache();
       var handToShelfNorm = Vec3.normalize(bowstringHandToArrowShelf);
       var releaseVelocity = Vec3.multiply(handToShelfNorm, arrowForce);
 
+      var arrowParticleProperties = {
+        type: 'ParticleEffect',
+        name: ARROW_PARTICLE_NAME,
+        parentID: this.arrowID,
+        alphaStart: 0.3,
+        alphaFinish: 0,
+        azimuthStart: -3.14159,
+        azimuthFinish: 3.1,
+        emitAcceleration: { x: 0, y: 0, z: 0 },
+        emitOrientation: { x: -0.7, y: 0.0, z: 0.0, w: 0.7 },
+        emitRate: 0.01,
+        emitSpeed: 0,
+        lifespan: ARROW_PARTICLE_LIFESPAN,
+        lifetime: ARROW_PARTICLE_LIFESPAN + 1,
+        particleRadius: 0.132,
+        radiusStart: 0.132,
+        radiusFinish: 0.35,
+        speedSpread: 0,
+        textures: ARROW_PARTICLE_URL
+      };
+
+      // Add particles.
+      Entities.addEntity(arrowParticleProperties);
+
       // Unparent the arrow and launch it (by giving it a velocity).
-      var arrowProperties = {
+      Entities.editEntity(this.arrowID, {
         dynamic: true,
         collisionless: false,
         collidesWith: 'static,dynamic,otherAvatar',
@@ -368,11 +395,7 @@ var printIfChanged = printCache();
         parentID: NULL_UUID,
         gravity: ARROW_GRAVITY,
         lifetime: arrowAge + ARROW_LIFETIME
-      };
-
-      Entities.editEntity(this.arrowID, arrowProperties);
-
-      // TODO: Add particles
+      });
 
       // Cause the arrow to orient itself along the trajectoy, i.e. be nose
       // heavy.
