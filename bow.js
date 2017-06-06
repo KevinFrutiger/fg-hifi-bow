@@ -33,6 +33,11 @@ var printIfChanged = printCache();
 
   //Script.include("/~/system/libraries/utils.js");
 
+  const ARROW_SHELF_SOUND_URL = Script.resolvePath('sound/notch.wav');
+  const SHOOT_ARROW_SOUND_URL = Script.resolvePath('sound/String_release2.L.wav');
+  const BOWSTRING_PULL_SOUND_URL = Script.resolvePath('sound/Bow_draw.1.L.wav');
+  const ARROW_HIT_SOUND_URL = Script.resolvePath('sound/Arrow_impact1.L.wav');
+
   const BOWSTRING_NAME = 'HiFi-Bowstring';
   const DRAW_BOWSTRING_THRESHOLD = 0.80;
   const NEAR_TO_RELAXED_SHELF_DISTANCE = 0.45;
@@ -86,6 +91,8 @@ var printIfChanged = printCache();
   const STATE_IDLE = 0;
   const STATE_ARROW_GRABBED = 1;
 
+
+
   var testEntityID = null; // Just an entity used for seeing positions, etc
 
   function Bow() {
@@ -101,6 +108,11 @@ var printIfChanged = printCache();
     print('Bow preload');
     this.entityID = entityID;
     this.createBowstring();
+
+    this.arrowShelfSound = SoundCache.getSound(ARROW_SHELF_SOUND_URL);
+    this.shootArrowSound = SoundCache.getSound(SHOOT_ARROW_SOUND_URL);
+    this.bowstringPullSound = SoundCache.getSound(BOWSTRING_PULL_SOUND_URL);
+    this.arrowHitSound = SoundCache.getSound(ARROW_HIT_SOUND_URL);
   };
 
   Bow.prototype.startEquip = function(entityID, args) { // args is [joint name, jointid]
@@ -132,6 +144,9 @@ var printIfChanged = printCache();
     this.updateIntervalID = null;
 
     print('releaseEquip', entityID, args)
+
+    // Re-enable the bowstring hand.
+    Messages.sendLocalMessage('Hifi-Hand-Disabler', 'none');
 
     // Make the bow grabbable by everyone (including yourself)
     var data = JSON.parse(Entities.getEntityProperties(entityID).userData);
@@ -197,8 +212,12 @@ var printIfChanged = printCache();
         // tablet stylus, etc.) for the hand that's grabbing the bowstring.
         Messages.sendLocalMessage('Hifi-Hand-Disabler', this.bowstringHand);
 
+        this.playArrowShelfSound();
+
         // Rez the arrow.
         this.arrowID = this.createArrow();
+
+        this.playBowstringPullSound();
       }
 
       if (this.triggerValue < DRAW_BOWSTRING_THRESHOLD) {
@@ -397,6 +416,8 @@ var printIfChanged = printCache();
         lifetime: arrowAge + ARROW_LIFETIME
       });
 
+      this.playShootArrowSound();
+
       // Cause the arrow to orient itself along the trajectoy, i.e. be nose
       // heavy.
       Entities.addAction('travel-oriented', this.arrowID, {
@@ -483,11 +504,11 @@ var printIfChanged = printCache();
   };
 
 
-// TODO: review getGrabPointSphereOffset
+  // TODO: review getGrabPointSphereOffset
   // this offset needs to match the one in libraries/display-plugins/src/display-plugins/hmd/HmdDisplayPlugin.cpp:378
-var GRAB_POINT_SPHERE_OFFSET = { x: 0.04, y: 0.13, z: 0.039 };  // x = upward, y = forward, z = lateral
+  var GRAB_POINT_SPHERE_OFFSET = { x: 0.04, y: 0.13, z: 0.039 };  // x = upward, y = forward, z = lateral
 
-Bow.prototype.getGrabPointSphereOffset = function(handController) {
+  Bow.prototype.getGrabPointSphereOffset = function(handController) {
     if (handController === Controller.Standard.RightHand) {
         return GRAB_POINT_SPHERE_OFFSET;
     }
@@ -496,7 +517,32 @@ Bow.prototype.getGrabPointSphereOffset = function(handController) {
         y: GRAB_POINT_SPHERE_OFFSET.y,
         z: GRAB_POINT_SPHERE_OFFSET.z
     };
-};
+  };
+
+
+  // Sound
+  Bow.prototype.playArrowShelfSound = function() {
+    Audio.playSound(this.arrowShelfSound, {
+      volume: 0.15,
+      position: this.bowProperties.position
+    });
+  }
+
+  Bow.prototype.playBowstringPullSound = function() {
+    Audio.playSound(this.bowstringPullSound, {
+      volume: 0.15,
+      position: this.bowProperties.position
+    });
+  }
+
+  Bow.prototype.playShootArrowSound = function() {
+    Audio.playSound(this.shootArrowSound, {
+      volume: 0.15,
+      position: this.bowProperties.position
+    });
+  }
+
+
 
 
   var bow = new Bow();
