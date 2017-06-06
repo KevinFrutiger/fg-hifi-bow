@@ -325,7 +325,35 @@ var printIfChanged = printCache();
       })
     });
 
-    // TODO: make arrow stick
+    // Make arrow stay in place when it collides with something.
+    var makeArrowStick = function(arrowEntity, otherEntity, collision) {
+      Entities.editEntity(arrowEntity, {
+        localAngularVelocity: {
+          x: 0,
+          y: 0,
+          z: 0
+        },
+        localVelocity: {
+          x: 0,
+          y: 0,
+          z: 0
+        },
+        gravity: {
+          x: 0,
+          y: 0,
+          z: 0
+        },
+        parentID: otherEntity,
+        dynamic: false,
+        collisionless: true,
+        collidesWith: ''
+      });
+
+      Script.removeEventHandler(arrowID, 'collisionWithEntity', makeArrowStick);
+    }
+
+    // Listen for the arrow to collide with things.
+    Script.addEventHandler(arrowID, 'collisionWithEntity', makeArrowStick);
 
     return arrowID;
 
