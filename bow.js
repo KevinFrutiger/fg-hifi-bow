@@ -39,7 +39,7 @@ var printIfChanged = printCache();
   const ARROW_SHELF_OFFSET_FORWARD = 0.08;
   const ARROW_SHELF_OFFSET_UP = 0.035;
   const ARROW_SHELF_OFFSET_RIGHT = -0.010;
-  const BOWSTRING_DRAW_DELTA_FOR_HAPTIC_PULSE = 0.09;
+  const BOWSTRING_DRAW_DELTA_FOR_HAPTIC_PULSE = 0.045; // lower number = faster pulse
   const BOWSTRING_MAX_DRAW = 0.7;
   const TOP_NOCK_POSITION = { // Local to the bowstring
     x: 0,
@@ -65,7 +65,7 @@ var printIfChanged = printCache();
     y: -9.8,
     z: 0
   };
-  const ARROW_LIFETIME = 15; // seconds
+  const ARROW_LIFETIME = 15.0; // seconds
   const MIN_ARROW_DISTANCE_FROM_BOW_REST = 0.2;
   const MAX_ARROW_DISTANCE_FROM_BOW_REST = ARROW_DIMENSIONS.z - 0.2;
   const MIN_ARROW_DISTANCE_FROM_BOW_REST_TO_SHOOT = 0.2;
@@ -321,7 +321,7 @@ var printIfChanged = printCache();
     var handHapticIndex = (this.bowstringHand === 'left') ? 0 : 1;
     var pullBackDistance = Vec3.length(bowstringHandToArrowShelf);
 
-    // Pulse the controller.
+    // Pulse the controller if the change from last update is above the threshold.
     if (shouldPulseHaptics &&
         Math.abs(pullBackDistance - this.pullBackDistance) >
             BOWSTRING_DRAW_DELTA_FOR_HAPTIC_PULSE) {
@@ -359,7 +359,7 @@ var printIfChanged = printCache();
       var handToShelfNorm = Vec3.normalize(bowstringHandToArrowShelf);
       var releaseVelocity = Vec3.multiply(handToShelfNorm, arrowForce);
 
-      // Set up the arrow for the physics sim and unparent from the bow.
+      // Unparent the arrow and launch it (by giving it a velocity).
       var arrowProperties = {
         dynamic: true,
         collisionless: false,
@@ -374,10 +374,11 @@ var printIfChanged = printCache();
 
       // TODO: Add particles
 
-      // Launch the arrow.
-      Entities.addAction('travel-orient', this.arrowID, {
+      // Cause the arrow to orient itself along the trajectoy, i.e. be nose
+      // heavy.
+      Entities.addAction('travel-oriented', this.arrowID, {
         forward: {x: 0, y: 0, z: -1},
-        angularTimeScale: 0.1,
+        angularTimeScale: 0.1, // How quickly it adjusts to change in trajectory.
         tag: 'Arrow from HiFi-bow',
         ttl: ARROW_LIFETIME
       });
