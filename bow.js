@@ -35,7 +35,7 @@ var printIfChanged = printCache();
 
   const BOWSTRING_NAME = 'HiFi-Bowstring';
   const DRAW_BOWSTRING_THRESHOLD = 0.80;
-  const NEAR_TO_RELAXED_SHELF_DISTANCE = 0.50;
+  const NEAR_TO_RELAXED_SHELF_DISTANCE = 0.45;
   const ARROW_SHELF_OFFSET_FORWARD = 0.08;
   const ARROW_SHELF_OFFSET_UP = 0.035;
   const ARROW_SHELF_OFFSET_RIGHT = -0.010;
@@ -54,7 +54,7 @@ var printIfChanged = printCache();
 
   const ARROW_NAME = 'HiFi-Arrow';
   const ARROW_MODEL_URL = Script.resolvePath('arrow.fbx');
-  const ARROW_TIP_OFFSET = 0.47; // Distance from center of arrow to tip of the arrowhead.
+  const ARROW_TIP_OFFSET = 0.47; // Distance from origin of arrow to tip of the arrowhead.
   const ARROW_DIMENSIONS = {
     x: 0.1,
     y: 0.1,
@@ -190,8 +190,8 @@ var printIfChanged = printCache();
 
     if (this.state === STATE_ARROW_GRABBED) {
       if (!this.arrowID) {
-        // Disable the auxilary hand functionality for the hand that's grabbing
-        // the bowstring, like the grabbing laser pointer, tablet stylus, etc.
+        // Disable the auxilary hand functionality (grab laser pointer,
+        // tablet stylus, etc.) for the hand that's grabbing the bowstring.
         Messages.sendLocalMessage('Hifi-Hand-Disabler', this.bowstringHand);
 
         // Rez the arrow.
@@ -318,19 +318,20 @@ var printIfChanged = printCache();
     var arrowRotation =
             Quat.rotationBetween(Vec3.FRONT, bowstringHandToArrowShelf);
 
-    var handHapticIndex = (this.bowstringHand === 'left' ? 0 : 1);
-    var pullbackDistance = Vec3.length(bowstringHandToArrowShelf);
+    var handHapticIndex = (this.bowstringHand === 'left') ? 0 : 1;
+    var pullBackDistance = Vec3.length(bowstringHandToArrowShelf);
 
+    // Pulse the controller.
     if (shouldPulseHaptics &&
-        Math.abs(pullbackDistance - this.pullbackDistance) >
+        Math.abs(pullBackDistance - this.pullBackDistance) >
             BOWSTRING_DRAW_DELTA_FOR_HAPTIC_PULSE) {
 
         Controller.triggerHapticPulse(1, 20, handHapticIndex);
-        this.pullbackDistance = pullbackDistance;
+        this.pullBackDistance = pullBackDistance;
     }
 
     // Cap the distance you can draw back the bowstring.
-    pullbackDistance = Math.min(BOWSTRING_MAX_DRAW, pullbackDistance);
+    pullBackDistance = Math.min(BOWSTRING_MAX_DRAW, pullBackDistance);
 
     var handToShelfDistance = Vec3.length(bowstringHandToArrowShelf);
     var bowstringToShelfDistance =
