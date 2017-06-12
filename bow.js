@@ -1,5 +1,10 @@
-// Utilities
-function conditionalPrint() {
+// Debug utilities
+//
+// Created by Kevin Frutiger 6/2017
+//
+// Copyright 2017 Kevin Frutiger
+
+function oneTimePrint() {
   var shouldPrint = true;
 
   return function(message) {
@@ -10,7 +15,7 @@ function conditionalPrint() {
   }
 }
 
-var printOnce = conditionalPrint();
+var printOnce = oneTimePrint();
 
 function printCache() {
   var lastMessage = '';
@@ -25,13 +30,102 @@ function printCache() {
 
 var printIfChanged = printCache();
 
-//
 
+// Controller location utilities
+//
+//  Created by Seth Alves on 2016-9-7
+//  Copyright 2016 High Fidelity, Inc.
+//
+//  Distributed under the Apache License, Version 2.0.
+//  See the accompanying file LICENSE or http://www.apache.org/licenses/LICENSE-2.0.html
+/* global MyAvatar, Vec3, Controller, Quat */
+
+var GRAB_COMMUNICATIONS_SETTING = "io.highfidelity.isFarGrabbing";
+setGrabCommunications = function setFarGrabCommunications(on) {
+    Settings.setValue(GRAB_COMMUNICATIONS_SETTING, on ? "on" : "");
+}
+getGrabCommunications = function getFarGrabCommunications() {
+    return !!Settings.getValue(GRAB_COMMUNICATIONS_SETTING, "");
+}
+
+// this offset needs to match the one in libraries/display-plugins/src/display-plugins/hmd/HmdDisplayPlugin.cpp:378
+var GRAB_POINT_SPHERE_OFFSET = { x: 0.04, y: 0.13, z: 0.039 };  // x = upward, y = forward, z = lateral
+
+getGrabPointSphereOffset = function(handController) {
+    if (handController === Controller.Standard.RightHand) {
+        return GRAB_POINT_SPHERE_OFFSET;
+    }
+    return {
+        x: GRAB_POINT_SPHERE_OFFSET.x * -1,
+        y: GRAB_POINT_SPHERE_OFFSET.y,
+        z: GRAB_POINT_SPHERE_OFFSET.z
+    };
+};
+
+getControllerLocation = function(controllerHand) {
+  var standardControllerValue =
+      (controllerHand === "right") ?
+      Controller.Standard.RightHand :
+      Controller.Standard.LeftHand;
+  return getControllerWorldLocation(standardControllerValue, true);
+}
+
+// controllerWorldLocation is where the controller would be, in-world, with an added offset
+getControllerWorldLocation = function (handController, doOffset) {
+    var orientation;
+    var position;
+    var pose = Controller.getPoseValue(handController);
+    var valid = pose.valid;
+    var controllerJointIndex;
+    if (pose.valid) {
+        if (handController === Controller.Standard.RightHand) {
+            controllerJointIndex = MyAvatar.getJointIndex("_CAMERA_RELATIVE_CONTROLLER_RIGHTHAND");
+        } else {
+            controllerJointIndex = MyAvatar.getJointIndex("_CAMERA_RELATIVE_CONTROLLER_LEFTHAND");
+        }
+        orientation = Quat.multiply(MyAvatar.orientation, MyAvatar.getAbsoluteJointRotationInObjectFrame(controllerJointIndex));
+        position = Vec3.sum(MyAvatar.position, Vec3.multiplyQbyV(MyAvatar.orientation, MyAvatar.getAbsoluteJointTranslationInObjectFrame(controllerJointIndex)));
+
+        // add to the real position so the grab-point is out in front of the hand, a bit
+        if (doOffset) {
+            var offset = getGrabPointSphereOffset(handController);
+            position = Vec3.sum(position, Vec3.multiplyQbyV(orientation, offset));
+        }
+
+    } else if (!HMD.isHandControllerAvailable()) {
+        // NOTE: keep this offset in sync with scripts/system/controllers/handControllerPointer.js:493
+        var VERTICAL_HEAD_LASER_OFFSET = 0.1;
+        position = Vec3.sum(Camera.position, Vec3.multiplyQbyV(Camera.orientation, {x: 0, y: VERTICAL_HEAD_LASER_OFFSET, z: 0}));
+        orientation = Quat.multiply(Camera.orientation, Quat.angleAxis(-90, { x: 1, y: 0, z: 0 }));
+        valid = true;
+    }
+
+    return {position: position,
+            translation: position,
+            orientation: orientation,
+            rotation: orientation,
+            valid: valid};
+};
+
+
+
+//  Bow entity script
+
+//  This script attaches to a bow that you can pick up with a hand controller.
+//
+//  Refactored 6/12/2017 from example created by James B. Pollack @imgntn on 10/19/2015
+//  https://wiki.highfidelity.com/wiki/Shortbow_Tutorial
+//
+//  Copyright 2017 Kevin Frutiger (@KevinFrutiger)
+//
+//  Distributed under the Apache License, Version 2.0.
+//  See the accompanying file LICENSE or http://www.apache.org/licenses/LICENSE-2.0.html
+//
+/* global Script, Controller, SoundCache, Entities, MyAvatar,
+          Vec3, Quat, Messages */
 (function() {
 
-  print('this is the bow function body');
-
-  //Script.include("/~/system/libraries/utils.js");
+  //print('this is the bow function body');
 
   const ARROW_SHELF_SOUND_URL = Script.resolvePath('sound/notch.wav');
   const SHOOT_ARROW_SOUND_URL = Script.resolvePath('sound/String_release2.L.wav');
@@ -91,12 +185,10 @@ var printIfChanged = printCache();
   const STATE_IDLE = 0;
   const STATE_ARROW_GRABBED = 1;
 
-
-
   var testEntityID = null; // Just an entity used for seeing positions, etc
 
   function Bow() {
-    print('Bow constructor');
+    //print('Bow constructor');
   }
 
   Bow.prototype.state = STATE_IDLE;
@@ -105,7 +197,7 @@ var printIfChanged = printCache();
   Bow.prototype.pullBackDistance = 0;
 
   Bow.prototype.preload = function(entityID) {
-    print('Bow preload');
+    //print('Bow preload');
     this.entityID = entityID;
     this.createBowstring();
 
@@ -116,7 +208,7 @@ var printIfChanged = printCache();
   };
 
   Bow.prototype.startEquip = function(entityID, args) { // args is [joint name, jointid]
-    print('startEquip', entityID, args);
+    //print('startEquip', entityID, args);
 
     // Store which hand is on the bow and which will interact with the bowstring
     this.bowHand = args[0];
@@ -143,7 +235,7 @@ var printIfChanged = printCache();
     Script.clearInterval(this.updateIntervalID);
     this.updateIntervalID = null;
 
-    print('releaseEquip', entityID, args)
+    //print('releaseEquip', entityID, args)
 
     // Re-enable the bowstring hand.
     Messages.sendLocalMessage('Hifi-Hand-Disabler', 'none');
@@ -185,12 +277,12 @@ var printIfChanged = printCache();
     // END TESTING ONLY
 
     var bowstringHandPosition =
-            this.getControllerLocation(this.bowstringHand).position;
+            getControllerLocation(this.bowstringHand).position;
     var bowstringHandToArrowShelf =
             Vec3.subtract(arrowShelfPosition, bowstringHandPosition);
     var pullBackDistance = Vec3.length(bowstringHandToArrowShelf);
 
-    printIfChanged('state is ' + this.state + ' ' + this.arrowID);
+    //printIfChanged('state is ' + this.state + ' ' + this.arrowID);
 
     if (this.state === STATE_IDLE) {
 
@@ -362,7 +454,7 @@ var printIfChanged = printCache();
   Bow.prototype.updateArrowOnShelf = function(shouldRelease, shouldPulseHaptics) {
     var arrowShelfPosition = this.getArrowShelfPosition(this.bowProperties);
     var bowstringHandPosition =
-            this.getControllerLocation(this.bowstringHand).position;
+            getControllerLocation(this.bowstringHand).position;
     var bowstringHandToArrowShelf =
             Vec3.subtract(arrowShelfPosition, bowstringHandPosition);
     var arrowRotation =
@@ -486,68 +578,6 @@ var printIfChanged = printCache();
     return arrowShelfPosition;
   };
 
-  Bow.prototype.getControllerLocation = function(controllerHand) {
-    var standardControllerValue =
-        (controllerHand === "right") ?
-        Controller.Standard.RightHand :
-        Controller.Standard.LeftHand;
-    return this.getControllerWorldLocation(standardControllerValue, true);
-  }
-
-  // controllerWorldLocation is where the controller would be, in-world, with an added offset
-  Bow.prototype.getControllerWorldLocation = function (handController, shouldOffset) {
-    var orientation;
-    var position;
-    var pose = Controller.getPoseValue(handController);
-    var valid = pose.valid;
-    var controllerJointIndex;
-    if (pose.valid) {
-        if (handController === Controller.Standard.RightHand) {
-            controllerJointIndex = MyAvatar.getJointIndex("_CAMERA_RELATIVE_CONTROLLER_RIGHTHAND");
-        } else {
-            controllerJointIndex = MyAvatar.getJointIndex("_CAMERA_RELATIVE_CONTROLLER_LEFTHAND");
-        }
-        orientation = Quat.multiply(MyAvatar.orientation, MyAvatar.getAbsoluteJointRotationInObjectFrame(controllerJointIndex));
-        position = Vec3.sum(MyAvatar.position, Vec3.multiplyQbyV(MyAvatar.orientation, MyAvatar.getAbsoluteJointTranslationInObjectFrame(controllerJointIndex)));
-
-        // add to the real position so the grab-point is out in front of the hand, a bit
-        if (shouldOffset) {
-            var offset = this.getGrabPointSphereOffset(handController);
-            position = Vec3.sum(position, Vec3.multiplyQbyV(orientation, offset));
-        }
-
-    } else if (!HMD.isHandControllerAvailable()) {
-        // NOTE: keep this offset in sync with scripts/system/controllers/handControllerPointer.js:493
-        var VERTICAL_HEAD_LASER_OFFSET = 0.1;
-        position = Vec3.sum(Camera.position, Vec3.multiplyQbyV(Camera.orientation, {x: 0, y: VERTICAL_HEAD_LASER_OFFSET, z: 0}));
-        orientation = Quat.multiply(Camera.orientation, Quat.angleAxis(-90, { x: 1, y: 0, z: 0 }));
-        valid = true;
-    }
-
-    return {position: position,
-            translation: position,
-            orientation: orientation,
-            rotation: orientation,
-            valid: valid};
-  };
-
-
-  // TODO: review getGrabPointSphereOffset
-  // this offset needs to match the one in libraries/display-plugins/src/display-plugins/hmd/HmdDisplayPlugin.cpp:378
-  var GRAB_POINT_SPHERE_OFFSET = { x: 0.04, y: 0.13, z: 0.039 };  // x = upward, y = forward, z = lateral
-
-  Bow.prototype.getGrabPointSphereOffset = function(handController) {
-    if (handController === Controller.Standard.RightHand) {
-        return GRAB_POINT_SPHERE_OFFSET;
-    }
-    return {
-        x: GRAB_POINT_SPHERE_OFFSET.x * -1,
-        y: GRAB_POINT_SPHERE_OFFSET.y,
-        z: GRAB_POINT_SPHERE_OFFSET.z
-    };
-  };
-
-
   // Sound
   Bow.prototype.playArrowShelfSound = function() {
     Audio.playSound(this.arrowShelfSound, {
@@ -569,8 +599,6 @@ var printIfChanged = printCache();
       position: this.bowProperties.position
     });
   }
-
-
 
 
   var bow = new Bow();
