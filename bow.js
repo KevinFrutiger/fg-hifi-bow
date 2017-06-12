@@ -4,6 +4,11 @@
 //
 // Copyright 2017 Kevin Frutiger
 
+/**
+ * Creates a functino to print to the debug only once. Useful in update loop.
+ *
+ * @returns {function} Function that prints.
+ */
 function oneTimePrint() {
   var shouldPrint = true;
 
@@ -17,6 +22,15 @@ function oneTimePrint() {
 
 var printOnce = oneTimePrint();
 
+/**
+ * Creates a function tp print to the debug log only if the message is different
+ * than previous print (using the function). Useful in update loop. Can only be
+ * used on one item.
+ *
+ * @returns {function} Function that accepts message and prints.
+ *
+ * TODO: add id to allow it to be used for different items
+ */
 function printCache() {
   var lastMessage = '';
 
@@ -111,7 +125,7 @@ getControllerWorldLocation = function (handController, doOffset) {
 
 //  Bow entity script
 
-//  This script attaches to a bow that you can pick up with a hand controller.
+//  This script attaches to a bow that user can pick up with a hand controller.
 //
 //  Refactored 6/12/2017 from example created by James B. Pollack @imgntn on 10/19/2015
 //  https://wiki.highfidelity.com/wiki/Shortbow_Tutorial
@@ -196,8 +210,11 @@ getControllerWorldLocation = function (handController, doOffset) {
   Bow.prototype.backHandBusy = false;
   Bow.prototype.pullBackDistance = 0;
 
+  /**
+   * Handles HiFi preload call for the entity.
+   */
   Bow.prototype.preload = function(entityID) {
-    //print('Bow preload');
+    print('Bow preload');
     this.entityID = entityID;
     this.createBowstring();
 
@@ -207,6 +224,9 @@ getControllerWorldLocation = function (handController, doOffset) {
     this.arrowHitSound = SoundCache.getSound(ARROW_HIT_SOUND_URL);
   };
 
+  /**
+   * Handles HiFi startEquip call for the entity.
+   */
   Bow.prototype.startEquip = function(entityID, args) { // args is [joint name, jointid]
     //print('startEquip', entityID, args);
 
@@ -214,7 +234,8 @@ getControllerWorldLocation = function (handController, doOffset) {
     this.bowHand = args[0];
     this.bowstringHand = (this.bowHand === 'left') ? 'right' : 'left';
 
-    // Toggle the grabbable key, so no-one else can grab the bow (including you with your other hand).
+    // Toggle the grabbable key, so no-one else can grab the bow
+    // (including user with user's other hand).
     var data = JSON.parse(Entities.getEntityProperties(entityID).userData);
     data.grabbableKey.grabbable = false;
     Entities.editEntity(entityID, {userData: JSON.stringify(data)});
@@ -226,9 +247,14 @@ getControllerWorldLocation = function (handController, doOffset) {
 
     // Start the update loop.
     var self = this;
-    this.updateIntervalID = Script.setInterval(function() { self.update(); }, 11);
+    this.updateIntervalID = Script.setInterval(function() {
+                                self.update();
+                              }, 11); // 90fps
   };
 
+  /**
+   * Handles HiFi releaseEquip for the entity.
+   */
   Bow.prototype.releaseEquip = function(entityID, args) {
 
     // Stop the update loop.
@@ -240,7 +266,7 @@ getControllerWorldLocation = function (handController, doOffset) {
     // Re-enable the bowstring hand.
     Messages.sendLocalMessage('Hifi-Hand-Disabler', 'none');
 
-    // Make the bow grabbable by everyone (including yourself)
+    // Make the bow grabbable by everyone (including user)
     var data = JSON.parse(Entities.getEntityProperties(entityID).userData);
     data.grabbableKey.grabbable = true;
     Entities.editEntity(entityID, {userData: JSON.stringify(data)});
@@ -251,6 +277,10 @@ getControllerWorldLocation = function (handController, doOffset) {
     });
   };
 
+  /**
+   * Main update loop.
+   *
+   */
   Bow.prototype.update = function() {
     // Get the float value of the trigger on the bowstring hand's controller.
     this.triggerValue = Controller.getValue(
@@ -289,6 +319,7 @@ getControllerWorldLocation = function (handController, doOffset) {
       this.pullBackDistance = 0;
       this.resetBowstringToIdle();
 
+      // If user has grabbed the bowstring.
       if (this.triggerValue >= DRAW_BOWSTRING_THRESHOLD
           && pullBackDistance < NEAR_TO_RELAXED_SHELF_DISTANCE
           && !this.backHandBusy) {
@@ -299,6 +330,7 @@ getControllerWorldLocation = function (handController, doOffset) {
     }
 
     if (this.state === STATE_ARROW_GRABBED) {
+      // If there isn't an arrow yet.
       if (!this.arrowID) {
         // Disable the auxilary hand functionality (grab laser pointer,
         // tablet stylus, etc.) for the hand that's grabbing the bowstring.
@@ -312,6 +344,7 @@ getControllerWorldLocation = function (handController, doOffset) {
         this.playBowstringPullSound();
       }
 
+      // If user has let go of the bowstring.
       if (this.triggerValue < DRAW_BOWSTRING_THRESHOLD) {
 
         if (pullBackDistance >= MIN_ARROW_DISTANCE_FROM_BOW_REST_TO_SHOOT) {
@@ -335,8 +368,8 @@ getControllerWorldLocation = function (handController, doOffset) {
         this.state = STATE_IDLE;
         this.resetBowstringToIdle();
 
-      } else {
-
+      } else { // User is still holding the bowstring.
+        // Point the arrow.
         this.updateArrowOnShelf(false, true);
         this.updateBowstring();
 
@@ -396,6 +429,9 @@ getControllerWorldLocation = function (handController, doOffset) {
     });
   };
 
+  /**
+   * @returns {string} The entity ID of the arrow.
+   */
   Bow.prototype.createArrow = function() {
 
     var arrowID = Entities.addEntity({
@@ -451,6 +487,14 @@ getControllerWorldLocation = function (handController, doOffset) {
 
   };
 
+  /**
+   * Updates the position and orientation of the arrow on the bow's arrow shelf
+   * or releases the arrow and sets up physics for it.
+   *
+   * @param {boolean} shouldRelease Whether the arrow should release.
+   * @param {boolean} shouldPulseHaptics Whether the haptics should be activated
+   *     on the controller holding the bowstring.
+   */
   Bow.prototype.updateArrowOnShelf = function(shouldRelease, shouldPulseHaptics) {
     var arrowShelfPosition = this.getArrowShelfPosition(this.bowProperties);
     var bowstringHandPosition =
@@ -472,7 +516,7 @@ getControllerWorldLocation = function (handController, doOffset) {
         this.pullBackDistance = pullBackDistance;
     }
 
-    // Cap the distance you can draw back the bowstring.
+    // Cap the distance user can draw back the bowstring.
     pullBackDistance = Math.min(BOWSTRING_MAX_DRAW, pullBackDistance);
 
     var handToShelfDistance = Vec3.length(bowstringHandToArrowShelf);
@@ -494,10 +538,10 @@ getControllerWorldLocation = function (handController, doOffset) {
     } else { // Shoot the arrow.
       var arrowAge = Entities.getEntityProperties(this.arrowID, ['age']).age;
 
+      // Calc the velocity.
       // Scale the shot strength by the bowstring draw distance.
       var arrowForce = this.scaleArrowShotStrength(bowstringToShelfDistance);
-
-      // Calc the velocity
+      // Normalize the vector.
       var handToShelfNorm = Vec3.normalize(bowstringHandToArrowShelf);
       var releaseVelocity = Vec3.multiply(handToShelfNorm, arrowForce);
 
@@ -557,6 +601,11 @@ getControllerWorldLocation = function (handController, doOffset) {
     return MIN_ARROW_SPEED + (pct * (MAX_ARROW_SPEED - MIN_ARROW_SPEED));
   }
 
+  /**
+   * Calcs the arrow shelf position on the bow.
+   *
+   * @returns {Vec3} The vector of the arrow shelf.
+   */
   Bow.prototype.getArrowShelfPosition = function(bowProperties) {
     // Get the forward offset vector
     var frontVector = Quat.getFront(bowProperties.rotation);
