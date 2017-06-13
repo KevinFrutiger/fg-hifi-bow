@@ -44,12 +44,8 @@ var id = Entities.addEntity({
   modelURL: Script.resolvePath("bow-deadly.fbx"),
   script: Script.resolvePath("bow.js") + "?" + Date.now(),
   lifetime: 600, // In seconds. Other than -1 means it will eventually disappear
-  position: { // There's probably a Vec3 method that would be better. Base it off the front of the avatar?
-    x: MyAvatar.position.x,
-    y: MyAvatar.position.y + 2,
-    z: MyAvatar.position.z + 2
-  }, // Position is required. Otherwise it won't rez.
-  //"rotation": Quat.fromPitchYawRollDegrees(0, 90, 0), // If entity spawns intersecting floor, it will fall through.
+  // Position 1 meter in front of the user.
+  position: Vec3.sum(MyAvatar.position, Quat.getFront(MyAvatar.orientation)),
   dimensions: { // Entity scaled to match and bounding box created
     x: 0.0400,
     y: 1.3000,
