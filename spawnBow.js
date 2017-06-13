@@ -1,7 +1,7 @@
 /**
  * spawnBow.js
  *
- * Created from Shortbow tutrial:
+ * Created from Shortbow tutorial:
  * https://wiki.highfidelity.com/wiki/Shortbow_Tutorial
  *
  * Creates a bow entity and sets it up to be grabbable and wearable.
