@@ -411,9 +411,6 @@ getControllerWorldLocation = function (handController, doOffset) {
   Bow.prototype.resetBowstringToIdle = function() {
     Entities.editEntity(this.bowstringID, {
       linePoints: [TOP_NOCK_POSITION, BOTTOM_NOCK_POSITION],
-      //lineWidth: 10,
-      //localPosition: {x: 0, y: 0.6, z: 0.1 },
-      //localRotation: {w: 1, x: 0, y: 0, z: 0 },
     });
   };
 
