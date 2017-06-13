@@ -226,10 +226,21 @@ getControllerWorldLocation = function (handController, doOffset) {
     this.arrowHitSound = SoundCache.getSound(ARROW_HIT_SOUND_URL);
   };
 
-  // TODO: add unload handler
+  /**
+   * Handles HiFi unload for the entity (entity deleted).
+   */
+  Bow.prototype.unload = function() {
+    print('Bow unload');
+
+    // Re-enable auxilary functionality for the bowstring hand.
+    Messages.sendLocalMessage('Hifi-Hand-Disabler', 'none');
+
+    // Delete the most recent arrow.
+    Entities.deleteEntity(this.arrowID);
+  };
 
   /**
-   * Handles HiFi startEquip call for the entity.
+   * Handles HiFi startEquip call when the user equips the entity.
    */
   Bow.prototype.startEquip = function(entityID, args) { // args is [joint name, jointid]
     //print('startEquip', entityID, args);
