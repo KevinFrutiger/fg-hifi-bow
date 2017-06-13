@@ -1,3 +1,20 @@
+/**
+ * spawnBow.js
+ *
+ * Created from Shortbow tutrial:
+ * https://wiki.highfidelity.com/wiki/Shortbow_Tutorial
+ *
+ * Creates a bow entity and sets it up to be grabbable and wearable.
+ *
+ * This script not required if bow.js is attached directly to the bow entity
+ * (i.e. imported model and attached that script). In that case, you'd need to
+ * manually update the entity with any settings below.
+ */
+
+// Note that the currently the positions for the bow on the LeftHand and
+// RightHand are customized to a specific avatar and may need to be adjusted
+// to look correct on yours.
+
 var userData = { // These keys are features in the API
   grabbableKey: {
     grabbable: true,
