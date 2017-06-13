@@ -1,11 +1,12 @@
 // Debug utilities
 //
-// Created by Kevin Frutiger 6/2017
+// Created by Kevin Frutiger 6/12/2017
 //
 // Copyright 2017 Kevin Frutiger
 
 /**
- * Creates a functino to print to the debug only once. Useful in update loop.
+ * Creates a function to print to the debug log only once. Useful in update
+ * loop.
  *
  * @returns {function} Function that prints.
  */
@@ -23,11 +24,11 @@ function oneTimePrint() {
 var printOnce = oneTimePrint();
 
 /**
- * Creates a function tp print to the debug log only if the message is different
- * than previous print (using the function). Useful in update loop. Can only be
- * used on one item.
+ * Creates a function to print to the debug log only if the message is different
+ * than previous print (that used the function). Useful in update loop. Can only
+ * be used on one item.
  *
- * @returns {function} Function that accepts message and prints.
+ * @returns {function} Function that accepts a string and prints.
  *
  * TODO: add id to allow it to be used for different items
  */
@@ -52,7 +53,8 @@ var printIfChanged = printCache();
 //
 //  Distributed under the Apache License, Version 2.0.
 //  See the accompanying file LICENSE or http://www.apache.org/licenses/LICENSE-2.0.html
-/* global MyAvatar, Vec3, Controller, Quat */
+//
+//  global MyAvatar, Vec3, Controller, Quat
 
 var GRAB_COMMUNICATIONS_SETTING = "io.highfidelity.isFarGrabbing";
 setGrabCommunications = function setFarGrabCommunications(on) {
@@ -124,7 +126,7 @@ getControllerWorldLocation = function (handController, doOffset) {
 
 
 //  Bow entity script
-
+//
 //  This script attaches to a bow that user can pick up with a hand controller.
 //
 //  Refactored 6/12/2017 from example created by James B. Pollack @imgntn on 10/19/2015
@@ -135,8 +137,9 @@ getControllerWorldLocation = function (handController, doOffset) {
 //  Distributed under the Apache License, Version 2.0.
 //  See the accompanying file LICENSE or http://www.apache.org/licenses/LICENSE-2.0.html
 //
-/* global Script, Controller, SoundCache, Entities, MyAvatar,
-          Vec3, Quat, Messages */
+//  global Script, Controller, SoundCache, Entities, MyAvatar,
+//         Vec3, Quat, Messages
+
 (function() {
 
   //print('this is the bow function body');
@@ -149,17 +152,18 @@ getControllerWorldLocation = function (handController, doOffset) {
   const BOWSTRING_NAME = 'HiFi-Bowstring';
   const DRAW_BOWSTRING_THRESHOLD = 0.80;
   const NEAR_TO_RELAXED_SHELF_DISTANCE = 0.45;
+  // Offsets include arrow shaft radius so that arrow appears to rest on shelf.
   const ARROW_SHELF_OFFSET_FORWARD = 0.08;
   const ARROW_SHELF_OFFSET_UP = 0.035;
   const ARROW_SHELF_OFFSET_RIGHT = -0.010;
-  const BOWSTRING_DRAW_DELTA_FOR_HAPTIC_PULSE = 0.045; // lower number = faster pulse
+  const BOWSTRING_DRAW_DELTA_FOR_HAPTIC_PULSE = 0.045; // lower number gives faster pulse
   const BOWSTRING_MAX_DRAW = 0.7;
-  const TOP_NOCK_POSITION = { // Local to the bowstring
+  const TOP_NOCK_POSITION = { // Local to the bowstring.
     x: 0,
     y: 0,
     z: 0
   }
-  const BOTTOM_NOCK_POSITION = {
+  const BOTTOM_NOCK_POSITION = { // Local to the bowstring (i.e. relative to top nock).
     x: 0,
     y: -1.2,
     z: 0
@@ -199,15 +203,13 @@ getControllerWorldLocation = function (handController, doOffset) {
   const STATE_IDLE = 0;
   const STATE_ARROW_GRABBED = 1;
 
-  var testEntityID = null; // Just an entity used for seeing positions, etc
-
   function Bow() {
     //print('Bow constructor');
   }
 
   Bow.prototype.state = STATE_IDLE;
-  Bow.prototype.arrowID = null; // The arrow entity
-  Bow.prototype.backHandBusy = false;
+  Bow.prototype.arrowID = null; // The most recently created arrow entity ID
+  Bow.prototype.backHandBusy = false; // Whether the non-bow hand is doing something else
   Bow.prototype.pullBackDistance = 0;
 
   /**
@@ -223,6 +225,8 @@ getControllerWorldLocation = function (handController, doOffset) {
     this.bowstringPullSound = SoundCache.getSound(BOWSTRING_PULL_SOUND_URL);
     this.arrowHitSound = SoundCache.getSound(ARROW_HIT_SOUND_URL);
   };
+
+  // TODO: add unload handler
 
   /**
    * Handles HiFi startEquip call for the entity.
@@ -240,7 +244,8 @@ getControllerWorldLocation = function (handController, doOffset) {
     data.grabbableKey.grabbable = false;
     Entities.editEntity(entityID, {userData: JSON.stringify(data)});
 
-    // Stop bow from colliding with things
+    // Stop bow from colliding with things, since the user is holding it and
+    // we don't have force-feedback.
     Entities.editEntity(entityID, {
       collidesWith: ''
     });
@@ -266,12 +271,12 @@ getControllerWorldLocation = function (handController, doOffset) {
     // Re-enable the bowstring hand.
     Messages.sendLocalMessage('Hifi-Hand-Disabler', 'none');
 
-    // Make the bow grabbable by everyone (including user)
+    // Make the bow grabbable by everyone (including user).
     var data = JSON.parse(Entities.getEntityProperties(entityID).userData);
     data.grabbableKey.grabbable = true;
     Entities.editEntity(entityID, {userData: JSON.stringify(data)});
 
-    // Make bow collidable again with anything
+    // Make bow collidable with everything again.
     Entities.editEntity(entityID, {
         collidesWith: "static,dynamic,kinematic,otherAvatar,myAvatar"
     });
@@ -280,9 +285,10 @@ getControllerWorldLocation = function (handController, doOffset) {
   /**
    * Main update loop.
    *
+   * (Called by a setInterval we created, not an entity event)
    */
   Bow.prototype.update = function() {
-    // Get the float value of the trigger on the bowstring hand's controller.
+    // Get the value of the trigger on the bowstring hand's controller.
     this.triggerValue = Controller.getValue(
         TRIGGER_CONTROLS[(this.bowstringHand === 'right') ? 1 : 0]);
 
@@ -290,22 +296,8 @@ getControllerWorldLocation = function (handController, doOffset) {
     this.bowProperties = Entities.getEntityProperties(this.entityID,
                                                       ['position', 'rotation']);
 
-    // Calc the arrow shelf's position.
+    // Calc the distance the user has pulled back the bowstring.
     var arrowShelfPosition = this.getArrowShelfPosition(this.bowProperties);
-
-    // TESTING ONLY
-    // if (!testEntityID) {
-    //   testEntityID = Entities.addEntity({
-    //     type: 'Box',
-    //     name: 'bow-test-cube',
-    //     position: arrowShelfPosition,
-    //     collisionless: true
-    //   });
-    // } else {
-    //   Entities.editEntity(testEntityID, {position: arrowShelfPosition});
-    // }
-    // END TESTING ONLY
-
     var bowstringHandPosition =
             getControllerLocation(this.bowstringHand).position;
     var bowstringHandToArrowShelf =
@@ -319,7 +311,7 @@ getControllerWorldLocation = function (handController, doOffset) {
       this.pullBackDistance = 0;
       this.resetBowstringToIdle();
 
-      // If user has grabbed the bowstring.
+      // If user has grabbed the bowstring, change the state.
       if (this.triggerValue >= DRAW_BOWSTRING_THRESHOLD
           && pullBackDistance < NEAR_TO_RELAXED_SHELF_DISTANCE
           && !this.backHandBusy) {
@@ -378,6 +370,9 @@ getControllerWorldLocation = function (handController, doOffset) {
 
   };
 
+  /**
+   * Rezes the bowstring.
+   */
   Bow.prototype.createBowstring = function() {
     this.bowstringID = Entities.addEntity({
       type: 'Line',
@@ -386,10 +381,10 @@ getControllerWorldLocation = function (handController, doOffset) {
       collisionless: true,
       ignoreForCollisions: 1,
       dimensions: { x: 5, y: 5, z: 5 }, // Has to be here for string to show. Not sure why it's 5 x 5 x 5. 1 x 1 x 1 doesn't work.
-      linePoints: [ { x: 0, y: 0, z: 0 }, { x: 0, y: -1.2, z: 0 } ],
+      linePoints: [TOP_NOCK_POSITION, BOTTOM_NOCK_POSITION],
       lineWidth: 10,
       color: { red: 153, green: 102, blue: 51 },
-      localPosition: { x: 0, y: 0.6, z: 0.1 }, // Not documented, but needed to put in correct position.
+      localPosition: { x: 0, y: 0.6, z: 0.1 }, // Puts local origin at top nock.
       localRotation: { w: 1, x: 0, y: 0, z: 0 }, // Not documented. Doesn't seem to have any affect.
       userData: JSON.stringify({
         grabbableKey: {
@@ -399,22 +394,25 @@ getControllerWorldLocation = function (handController, doOffset) {
     });
   };
 
+  /**
+   * Resets bowstring to a straight line between top and bottom nocks.
+   */
   Bow.prototype.resetBowstringToIdle = function() {
     Entities.editEntity(this.bowstringID, {
       linePoints: [TOP_NOCK_POSITION, BOTTOM_NOCK_POSITION],
-      lineWidth: 10,
-      localPosition: {x: 0, y: 0.6, z: 0.1 },
-      localRotation: {w: 1, x: 0, y: 0, z: 0 },
+      //lineWidth: 10,
+      //localPosition: {x: 0, y: 0.6, z: 0.1 },
+      //localRotation: {w: 1, x: 0, y: 0, z: 0 },
     });
   };
 
   Bow.prototype.updateBowstring = function() {
-    // Calc the position of the arrow nock.
+    // Calc the position of the arrow nock relative to the bowstring origin.
     var bowstringProps = Entities.getEntityProperties(this.bowstringID,
                                                       ['position', 'rotation']);
     var arrowNockPositionLocal =
             Vec3.subtract(this.arrowRearPosition, bowstringProps.position);
-    // Rotate the vector to align with the bow. (multiply Quat by Vec3)
+    // Rotate the vector to align with the bowstring (multiply Quat by Vec3).
     arrowNockPositionLocal =
             Vec3.multiplyQbyV(Quat.inverse(bowstringProps.rotation),
                               arrowNockPositionLocal);
@@ -430,6 +428,8 @@ getControllerWorldLocation = function (handController, doOffset) {
   };
 
   /**
+   * Creates an arrow.
+   *
    * @returns {string} The entity ID of the arrow.
    */
   Bow.prototype.createArrow = function() {
@@ -488,7 +488,7 @@ getControllerWorldLocation = function (handController, doOffset) {
   };
 
   /**
-   * Updates the position and orientation of the arrow on the bow's arrow shelf
+   * Updates the position and orientation of the arrow on the bow's arrow shelf,
    * or releases the arrow and sets up physics for it.
    *
    * @param {boolean} shouldRelease Whether the arrow should release.
@@ -496,39 +496,50 @@ getControllerWorldLocation = function (handController, doOffset) {
    *     on the controller holding the bowstring.
    */
   Bow.prototype.updateArrowOnShelf = function(shouldRelease, shouldPulseHaptics) {
+    // Calc the vector from the bowstring hand to the arrow shelf.
     var arrowShelfPosition = this.getArrowShelfPosition(this.bowProperties);
     var bowstringHandPosition =
             getControllerLocation(this.bowstringHand).position;
     var bowstringHandToArrowShelf =
             Vec3.subtract(arrowShelfPosition, bowstringHandPosition);
-    var arrowRotation =
-            Quat.rotationBetween(Vec3.FRONT, bowstringHandToArrowShelf);
 
-    var handHapticIndex = (this.bowstringHand === 'left') ? 0 : 1;
     var pullBackDistance = Vec3.length(bowstringHandToArrowShelf);
 
-    // Pulse the controller if the change from last update is above the threshold.
+    // Pulse the controller if the distance has changed enough. The pulsating
+    // sensation will occur from the pulse firing on every update loop.
     if (shouldPulseHaptics &&
         Math.abs(pullBackDistance - this.pullBackDistance) >
-            BOWSTRING_DRAW_DELTA_FOR_HAPTIC_PULSE) {
+        BOWSTRING_DRAW_DELTA_FOR_HAPTIC_PULSE) {
 
-        Controller.triggerHapticPulse(1, 20, handHapticIndex);
+        var strength = 1; // full strength
+        var duration = 20; // milliseconds
+        var bowstringHandIndex = (this.bowstringHand === 'left') ? 0 : 1;
+        Controller.triggerHapticPulse(strength, duration, bowstringHandIndex);
+
         this.pullBackDistance = pullBackDistance;
     }
 
     // Cap the distance user can draw back the bowstring.
     pullBackDistance = Math.min(BOWSTRING_MAX_DRAW, pullBackDistance);
 
+    // Calc the new arrow position.
     var handToShelfDistance = Vec3.length(bowstringHandToArrowShelf);
     var bowstringToShelfDistance =
             Math.max(MIN_ARROW_DISTANCE_FROM_BOW_REST,
                 Math.min(MAX_ARROW_DISTANCE_FROM_BOW_REST, handToShelfDistance));
-    var arrowPosition = Vec3.subtract(arrowShelfPosition, Vec3.multiply(Vec3.normalize(bowstringHandToArrowShelf), bowstringToShelfDistance - ARROW_DIMENSIONS.z / 2.0));
+    var arrowPosition =
+            Vec3.subtract(arrowShelfPosition,
+                Vec3.multiply(Vec3.normalize(bowstringHandToArrowShelf),
+                    bowstringToShelfDistance - ARROW_DIMENSIONS.z / 2.0));
 
+    // Calc the new arrow rotation
+    var arrowRotation =
+            Quat.rotationBetween(Vec3.FRONT, bowstringHandToArrowShelf);
+
+    // Calc the new position of the back end of the arrow.
     var frontVector = Quat.getFront(arrowRotation);
     var frontOffset = Vec3.multiply(frontVector, -ARROW_TIP_OFFSET);
-    var arrowRearPosition = Vec3.sum(arrowPosition, frontOffset);
-    this.arrowRearPosition = arrowRearPosition;
+    this.arrowRearPosition = Vec3.sum(arrowPosition, frontOffset);
 
     if (!shouldRelease) { // Aim the arrow.
       Entities.editEntity(this.arrowID, {
@@ -536,15 +547,16 @@ getControllerWorldLocation = function (handController, doOffset) {
         rotation: arrowRotation
       });
     } else { // Shoot the arrow.
-      var arrowAge = Entities.getEntityProperties(this.arrowID, ['age']).age;
-
-      // Calc the velocity.
-      // Scale the shot strength by the bowstring draw distance.
-      var arrowForce = this.scaleArrowShotStrength(bowstringToShelfDistance);
-      // Normalize the vector.
+      // Calc the shot strength.
+      var arrowShotStrength =
+          this.scaleArrowShotStrength(bowstringToShelfDistance);
+      // Get a normalized vector so we can calc the velocity vector without
+      // impacting the shot strength.
       var handToShelfNorm = Vec3.normalize(bowstringHandToArrowShelf);
-      var releaseVelocity = Vec3.multiply(handToShelfNorm, arrowForce);
+      // Calc the velocity.
+      var releaseVelocity = Vec3.multiply(handToShelfNorm, arrowShotStrength);
 
+      // Create particle effect of a flare pulsing on the arrow shaft (no trail).
       var arrowParticleProperties = {
         type: 'ParticleEffect',
         name: ARROW_PARTICLE_NAME,
@@ -566,18 +578,21 @@ getControllerWorldLocation = function (handController, doOffset) {
         textures: ARROW_PARTICLE_URL
       };
 
-      // Add particles.
+      // Add the particles.
       Entities.addEntity(arrowParticleProperties);
 
-      // Unparent the arrow and launch it (by giving it a velocity).
+      // Get the arrow's current age so we can add on a post-shot lifespan
+      var arrowAge = Entities.getEntityProperties(this.arrowID, ['age']).age;
+
+      // Unparent the arrow and launch it.
       Entities.editEntity(this.arrowID, {
         dynamic: true,
         collisionless: false,
         collidesWith: 'static,dynamic,otherAvatar',
-        velocity: releaseVelocity,
+        velocity: releaseVelocity, // Give the arrow motion
         parentID: NULL_UUID,
         gravity: ARROW_GRAVITY,
-        lifetime: arrowAge + ARROW_LIFETIME
+        lifetime: arrowAge + ARROW_LIFETIME // Cause arrow to eventually disappear
       });
 
       this.playShootArrowSound();
@@ -594,22 +609,36 @@ getControllerWorldLocation = function (handController, doOffset) {
 
   }
 
+  /**
+   * Calcs the arrow's shot strength.
+   *
+   * @param {number} drawDistance The distane the user has drawn the bowstring.
+   * @returns {number} The desired shot strength.
+   */
   Bow.prototype.scaleArrowShotStrength = function(drawDistance) {
     // Scale the shot strength to the portion of the available draw distance used.
     var pct = (drawDistance - MIN_ARROW_DISTANCE_FROM_BOW_REST) /
-              (MAX_ARROW_DISTANCE_FROM_BOW_REST - MIN_ARROW_DISTANCE_FROM_BOW_REST);
+              (MAX_ARROW_DISTANCE_FROM_BOW_REST -
+                   MIN_ARROW_DISTANCE_FROM_BOW_REST);
     return MIN_ARROW_SPEED + (pct * (MAX_ARROW_SPEED - MIN_ARROW_SPEED));
   }
 
   /**
    * Calcs the arrow shelf position on the bow.
    *
+   * This is the point on which the arrow will slide along the center of its
+   * shaft, so it's offset such that the edge of the arrow rests on the
+   * shelf visually.
+   *
+   * @param {EntityProperties} Properties of the bow. Only position and rotation
+   *     required.
    * @returns {Vec3} The vector of the arrow shelf.
    */
   Bow.prototype.getArrowShelfPosition = function(bowProperties) {
     // Get the forward offset vector
     var frontVector = Quat.getFront(bowProperties.rotation);
-    var arrowShelfVectorForward = Vec3.multiply(frontVector, ARROW_SHELF_OFFSET_FORWARD);
+    var arrowShelfVectorForward = Vec3.multiply(frontVector,
+                                                ARROW_SHELF_OFFSET_FORWARD);
 
     // Get the up offset vector
     var upVector = Quat.getUp(bowProperties.rotation);
@@ -617,10 +646,12 @@ getControllerWorldLocation = function (handController, doOffset) {
 
     // Get the left offset vector
     var rightVector = Quat.getRight(bowProperties.rotation);
-    var arrowShelfVectorLeft = Vec3.multiply(rightVector, ARROW_SHELF_OFFSET_RIGHT);
+    var arrowShelfVectorLeft = Vec3.multiply(rightVector,
+                                             ARROW_SHELF_OFFSET_RIGHT);
 
     // Sum the three offset directions to get the final position.
-    var arrowShelfPosition = Vec3.sum(bowProperties.position, arrowShelfVectorForward);
+    var arrowShelfPosition = Vec3.sum(bowProperties.position,
+                                      arrowShelfVectorForward);
     arrowShelfPosition = Vec3.sum(arrowShelfPosition, arrowShelfVectorUp);
     arrowShelfPosition = Vec3.sum(arrowShelfPosition, arrowShelfVectorLeft);
 
@@ -652,7 +683,7 @@ getControllerWorldLocation = function (handController, doOffset) {
 
   var bow = new Bow();
 
-  // TODO: Subscribe to messaging on bow instance
+  // TODO: Subscribe to messaging form external sources on bow instance?
 
   return bow;
 
