@@ -620,7 +620,7 @@ getControllerWorldLocation = function (handController, doOffset) {
   /**
    * Calcs the arrow's shot strength.
    *
-   * @param {number} drawDistance The distane the user has drawn the bowstring.
+   * @param {number} drawDistance The distance the user has drawn the bowstring.
    * @returns {number} The desired shot strength.
    */
   Bow.prototype.scaleArrowShotStrength = function(drawDistance) {
